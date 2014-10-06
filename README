@@ -6,7 +6,8 @@ DESCRIPTION
     application.
 
 SYNOPSIS
-    Set up an "app.psgi" for instance to get data via arXiv identifier:
+    Set up an "app.psgi" for instance to get data via <http://arxiv.org>
+    identifier using Catmandu::Importer::ArXiv:
 
         use Catmandu::Plack::unAPI;
         use Catmandu::Importer::ArXiv;
@@ -14,14 +15,19 @@ SYNOPSIS
         Catmandu::Plack::unAPI->new(
             query => sub {
                 my ($id) = @_;
+                return if $id !~ qr{^(arXiv:)?[0-9abc/.]+}i;
                 Catmandu::Importer::ArXiv->new( id => $id )->first;
             }
         )->to_app;
 
+    Retrieving items from a Catmandu::Store is even simpler:
+
+        Catmandu::Plack::unAPI->new( store => $store )->to_app;
+
     Start the application, e.g. with "plackup app.psgi" and query via unAPI:
 
-        curl localhost:5000/
-        curl 'localhost:5000/?id=1204.0492&format=json'
+        curl 'localhost:5000'
+        curl 'localhost:5000?id=1204.0492&format=json'
 
 CONFIGURATION
     query
@@ -30,6 +36,10 @@ CONFIGURATION
         returns undef, the application returns HTTP 404. If the methods
         returns a scalar, it is used as error message for HTTP response 400
         (Bad Request).
+
+    store
+        Instance of Catmandu::Store or store name and options as array
+        reference to query items from.
 
     formats
         Hash reference with format names mapped to MIME type,

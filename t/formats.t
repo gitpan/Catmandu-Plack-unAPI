@@ -14,8 +14,6 @@ use Catmandu::Plack::unAPI;
     }
 }
 
-#use Carp::Always;
-
 my $app = Catmandu::Plack::unAPI->new(
     query => sub { $_[0] > 0 ? { answer => $_[0] } : 'id must be positive' },
     formats => {
@@ -24,7 +22,7 @@ my $app = Catmandu::Plack::unAPI->new(
             exporter => [ 'PlainText', fix => 'reject all_match(answer,23)' ]
         }
     }
-);
+)->to_app;
 
 test_psgi $app, sub {
     my $cb  = shift;
@@ -46,5 +44,22 @@ test_psgi $app, sub {
     is $res->code, 400, '400 Bad Request';
     is $res->content, 'id must be positive';
 };   
+
+
+$app = Catmandu::Plack::unAPI->new(
+    query => sub { { foo => 'bar' } },
+    formats => {
+        plain => {
+            type => 'text/plain',
+            exporter => 'PlainText' # plain string
+        }
+    }
+);
+test_psgi $app, sub {
+    my $cb  = shift;
+    my $res = $cb->(GET "?id=foo&format=plain");
+    is $res->code, 200;
+    is $res->content, "foo=bar", 'content';
+};
 
 done_testing;

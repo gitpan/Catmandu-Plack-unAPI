@@ -1,15 +1,15 @@
 package Catmandu::Plack::unAPI;
 
 use Catmandu::Sane;
-use Catmandu qw(exporter);
-use Scalar::Util qw(blessed);
+use Catmandu;
+use Catmandu::Util qw(is_array_ref);
 use Plack::App::unAPI;
 use Plack::Request;
 use Moo;
 
 use parent 'Plack::Component';
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 has formats => (
     is      => 'ro',
@@ -30,9 +30,29 @@ has formats => (
     # TODO: check via pre-instanciation
 );
 
+has store => (
+    is     => 'ro',
+    coerce => sub {
+        if (is_array_ref($_[0])) {
+            Catmandu->store(@$_[0])
+        } elsif(!ref $_[0]) {
+            Catmandu->store($_[0])
+        } else {
+            $_[0];
+        }
+    }
+);
+
 has query => (
     is      => 'ro',
-    default => sub { }
+    lazy    => 1,
+    builder => sub {
+        if (my $store = $_[0]->store) {
+            sub { $store->bag->get($_[0]) }
+        } else {
+            sub { }
+        }
+    }
 );
 
 has unapi => (
@@ -61,7 +81,9 @@ sub format_as_app {
         my $record = $self->query->($id);
         if (ref $record) {
             my $out;
-            my $exporter = exporter( @{ $format->{exporter} }, file => \$out );
+            my $exporter = is_array_ref($format->{exporter}) 
+                         ? $format->{exporter} : [$format->{exporter}];
+            $exporter = Catmandu->exporter( @$exporter, file => \$out );
             $exporter->add($record);
             $exporter->commit;
             [ 200, [ 'Content-Type' => $format->{type} ] , [ $out ] ]; 
@@ -91,9 +113,9 @@ Catmandu::Plack::unAPI - unAPI webservice based on Catmandu
 
 # STATUS
 
-[![Build Status](https://travis-ci.org/gbv/CatmanduPlack-unAPI.png)](https://travis-ci.org/gbv/CatmanduPlack-unAPI)
-[![Coverage Status](https://coveralls.io/repos/gbv/CatmanduPlack-unAPI/badge.png?branch=devel)](https://coveralls.io/r/gbv/CatmanduPlack-unAPI?branch=devel)
-[![Kwalitee Score](http://cpants.cpanauthors.org/dist/CatmanduPlack-unAPI.png)](http://cpants.cpanauthors.org/dist/CatmanduPlack-unAPI)
+[![Build Status](https://travis-ci.org/gbv/Catmandu-Plack-unAPI.png)](https://travis-ci.org/gbv/Catmandu-Plack-unAPI)
+[![Coverage Status](https://coveralls.io/repos/gbv/Catmandu-Plack-unAPI/badge.png?branch=devel)](https://coveralls.io/r/gbv/Catmandu-Plack-unAPI?branch=devel)
+[![Kwalitee Score](http://cpants.cpanauthors.org/dist/Catmandu-Plack-unAPI.png)](http://cpants.cpanauthors.org/dist/Catmandu-Plack-unAPI)
 
 =end markdown
 
@@ -104,7 +126,8 @@ Catmandu::Plack::unAPI implements an unAPI web service as PSGI application.
 
 =head1 SYNOPSIS
 
-Set up an C<app.psgi> for instance to get data via arXiv identifier:
+Set up an C<app.psgi> for instance to get data via L<http://arxiv.org>
+identifier using L<Catmandu::Importer::ArXiv>:
 
     use Catmandu::Plack::unAPI;
     use Catmandu::Importer::ArXiv;
@@ -112,14 +135,19 @@ Set up an C<app.psgi> for instance to get data via arXiv identifier:
     Catmandu::Plack::unAPI->new(
         query => sub {
             my ($id) = @_;
+            return if $id !~ qr{^(arXiv:)?[0-9abc/.]+}i;
             Catmandu::Importer::ArXiv->new( id => $id )->first;
         }
     )->to_app;
 
+Retrieving items from a L<Catmandu::Store> is even simpler:
+
+    Catmandu::Plack::unAPI->new( store => $store )->to_app;
+
 Start the application, e.g. with C<plackup app.psgi> and query via unAPI:
 
-    curl localhost:5000/
-    curl 'localhost:5000/?id=1204.0492&format=json'
+    curl 'localhost:5000'
+    curl 'localhost:5000?id=1204.0492&format=json'
 
 =head1 CONFIGURATION
 
@@ -131,6 +159,11 @@ Code reference with a query method to get an item (as reference) by a given
 identifier (HTTP request parameter C<id>). If the method returns undef, the
 application returns HTTP 404. If the methods returns a scalar, it is used as
 error message for HTTP response 400 (Bad Request).
+
+=item store
+
+Instance of L<Catmandu::Store> or store name and options as array reference to
+query items from.
 
 =item formats
 

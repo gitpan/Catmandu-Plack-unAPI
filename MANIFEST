@@ -12,3 +12,4 @@ lib/Catmandu/Plack/unAPI.pm
 t/basic.t
 t/formats.t
 t/release-pod-syntax.t
+t/store.t
